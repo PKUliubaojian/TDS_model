@@ -19,11 +19,14 @@ def readDDM(DDMfolder,SNRrange=[0,50],SP_class='ocean'):
     filemetadata=os.path.join(DDMfolder,"metadata.nc")
     if os.path.exists(filemetadata):
         metadata=Dataset(filemetadata)
+        DDMs=Dataset(filemetadata)
         N_groups=len(metadata)
         group_num=np.arange(0,N_groups,dtype=np.int32)
         group_str= np.array(['{:0>6}'.format(x) for x in group_num])
-        metadata.groups('').NumberOfDelayPixels
-        DDMs.groups[0]
+        for group_name in group_str:
+            gp_metadata=metadata.groups[group_name].NumberOfDelayPixels
+            gp_DDM=DDMs.groups[group_name]
+            SNR=gp_metadata=metadata.groups[group_name].SNR
     else:
         return []
     
@@ -62,3 +65,6 @@ def xyz2latlon(x,y,z):
     e_p = (R_0/R_P)*e;
     lat = np.arctan((z + z_0*(e_p)**2)/p)*(180/np.pi);
     return lon,lat,alt
+
+
+#%%

@@ -13,26 +13,26 @@ from netCDF4 import Dataset
 import os
 #%%Read specified DDMs
 def readDDM(DDMfolder,SNRrange=[0,50],SP_class='ocean'):
-    "e.g. D:\\data\\GNSS\\TDS\\L1B\\2015-09\\09\\H00"
+    "D:\\data\\GNSS\\TDS\\L1B\\2015-09\\09\\H00"
     files=os.listdir(DDMfolder)
     fileDDMs=os.path.join(DDMfolder,"DDMs.nc")
     filemetadata=os.path.join(DDMfolder,"metadata.nc")
     if os.path.exists(filemetadata):
-        metadata=Dataset(filemetadata)
-        DDMs=Dataset(filemetadata)
+        metadata=Dataset(filemetadata,'r')
+        DDMs=Dataset(fileDDMs,'r')
         N_groups=len(metadata)
         group_num=np.arange(0,N_groups,dtype=np.int32)
         group_str= np.array(['{:0>6}'.format(x) for x in group_num])
         for group_name in group_str:
             gp_metadata=metadata.groups[group_name].NumberOfDelayPixels
             gp_DDM=DDMs.groups[group_name]
-            SNR=gp_metadata=metadata.groups[group_name].SNR
+            SNR=gp_metadata=metadata.groups[group_name].
     else:
         return []
     
 
 
-#%%
+#%% x,y,z to latitude , longitude and altitude
 def xyz2latlon(x,y,z):
     #x,y,z to latitude , longitude and altitude
     f = 1/298.257223563;        #   WGS-84 Flattening.
@@ -67,4 +67,18 @@ def xyz2latlon(x,y,z):
     return lon,lat,alt
 
 
-#%%
+#%% script for test
+DDMfolder="D:\\data\\GNSS\\TDS\\L1B\\2015-09\\09\\H00"
+fileDDMs=os.path.join(DDMfolder,"DDMs.nc")
+filemetadata=os.path.join(DDMfolder,"metadata.nc")
+metadata=Dataset(filemetadata)
+DDMs=Dataset(fileDDMs,'r')
+N_groups=len(metadata.groups)
+group_num=np.arange(0,N_groups,dtype=np.int32)
+group_str= np.array(['{:0>6}'.format(x) for x in group_num])
+for group_name in group_str:
+    g=metadata.groups[group_name].variables
+    g_SNR=np.array(g["DDMSNRAtPeakSingleDDM"])
+    g_Gain=np.array(g["AntennaGainTowardsSpecularPoint"])
+    g_incidenceAngle=np.array(g["SPIncidenceAngle"])
+    g_ddm=np.array(DDMs.groups['000001'].variables["DDM"])

@@ -11,27 +11,41 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from netCDF4 import Dataset
 import os
+from pandas import DataFrame,Series
+
 #%%Read specified DDMs
-def readDDM(DDMfolder,SNRrange=[0,50],SP_class='ocean'):
-    "D:\\data\\GNSS\\TDS\\L1B\\2015-09\\09\\H00"
-    files=os.listdir(DDMfolder)
-    fileDDMs=os.path.join(DDMfolder,"DDMs.nc")
-    filemetadata=os.path.join(DDMfolder,"metadata.nc")
-    if os.path.exists(filemetadata):
+class DDM:
+    def __init__(self,DDMfolder,SNRmin=0,SNR_max=50,SP_class='ocean'):
+        "D:\\data\\GNSS\\TDS\\L1B\\2015-09\\09\\H00"
+        fileDDMs=os.path.join(DDMfolder,"DDMs.nc")
+        filemetadata=os.path.join(DDMfolder,"metadata.nc")
         metadata=Dataset(filemetadata,'r')
-        DDMs=Dataset(fileDDMs,'r')
-        N_groups=len(metadata)
+        DDM_nc=Dataset(fileDDMs,'r')
+        N_groups=len(metadata.groups)
         group_num=np.arange(0,N_groups,dtype=np.int32)
         group_str= np.array(['{:0>6}'.format(x) for x in group_num])
-        for group_name in group_str:
-            gp_metadata=metadata.groups[group_name].NumberOfDelayPixels
-            gp_DDM=DDMs.groups[group_name]
-            SNR=gp_metadata=metadata.groups[group_name].
-    else:
-        return []
-    
-
-
+        SNR=np.zeros(0)
+        Gain=np.zeros(0)
+        IncidenceAngle=np.zeros(0)
+        for (idx,group_name) in zip(group_num,group_str):
+            g=metadata.groups[group_name].variables
+            g_SNR=np.array(g["DDMSNRAtPeakSingleDDM"])
+            SNR=np.append(SNR,g_SNR)
+            g_Gain=np.array(g["AntennaGainTowardsSpecularPoint"])
+            Gain=np.append(Gain,g_Gain)
+            g_IncidenceAngle=np.array(g["SPIncidenceAngle"])
+            IncidenceAngle=np.append(IncidenceAngle,g_IncidenceAngle)
+            g_ddm=np.array(DDM_nc.groups[group_name].variables["DDM"])
+            if(idx==0):
+                DDMs=g_ddm
+            else:
+                DDMs=np.append(DDMs,g_ddm,axis=0)
+        self.DDMs=DDMs
+        self.SNR=SNR
+        self.IncidenceAngle=IncidenceAngle
+        self.Gain=Gain
+        metadata.close()
+        DDM_nc.close()
 #%% x,y,z to latitude , longitude and altitude
 def xyz2latlon(x,y,z):
     #x,y,z to latitude , longitude and altitude
@@ -67,18 +81,3 @@ def xyz2latlon(x,y,z):
     return lon,lat,alt
 
 
-#%% script for test
-DDMfolder="D:\\data\\GNSS\\TDS\\L1B\\2015-09\\09\\H00"
-fileDDMs=os.path.join(DDMfolder,"DDMs.nc")
-filemetadata=os.path.join(DDMfolder,"metadata.nc")
-metadata=Dataset(filemetadata)
-DDMs=Dataset(fileDDMs,'r')
-N_groups=len(metadata.groups)
-group_num=np.arange(0,N_groups,dtype=np.int32)
-group_str= np.array(['{:0>6}'.format(x) for x in group_num])
-for group_name in group_str:
-    g=metadata.groups[group_name].variables
-    g_SNR=np.array(g["DDMSNRAtPeakSingleDDM"])
-    g_Gain=np.array(g["AntennaGainTowardsSpecularPoint"])
-    g_incidenceAngle=np.array(g["SPIncidenceAngle"])
-    g_ddm=np.array(DDMs.groups['000001'].variables["DDM"])

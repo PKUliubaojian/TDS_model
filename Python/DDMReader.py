@@ -15,7 +15,8 @@ from pandas import DataFrame,Series
 
 #%%Read specified DDMs
 class DDM:
-    def __init__(self,DDMfolder,SNRmin=0,SNR_max=50,SP_class='ocean'):
+    def __init__(self,DDMfolder,SNR_Min=0,SNR_Max=50,Incidence_Min=0,Incidence_Max=90,
+                 Gain_Min=-20,Gain_Max=30,SP_class='ocean'):
         "D:\\data\\GNSS\\TDS\\L1B\\2015-09\\09\\H00"
         fileDDMs=os.path.join(DDMfolder,"DDMs.nc")
         filemetadata=os.path.join(DDMfolder,"metadata.nc")
@@ -27,16 +28,32 @@ class DDM:
         SNR=np.zeros(0)
         Gain=np.zeros(0)
         IncidenceAngle=np.zeros(0)
+        SPlat=np.zeros(0)
+        SPlon=np.zeros(0)
+        ddm_count=0
         for (idx,group_name) in zip(group_num,group_str):
             g=metadata.groups[group_name].variables
-            g_SNR=np.array(g["DDMSNRAtPeakSingleDDM"])
-            SNR=np.append(SNR,g_SNR)
+            g_SNR=np.array(g["DDMSNRAtPeakSingleDDM"])            
             g_Gain=np.array(g["AntennaGainTowardsSpecularPoint"])
-            Gain=np.append(Gain,g_Gain)
             g_IncidenceAngle=np.array(g["SPIncidenceAngle"])
+            g_SPlat=np.array(g["SpecularPointLat"])
+            g_SPlon=np.array(g["SpecularPointLon"])
+            SNR=np.append(SNR,g_SNR)
+            Gain=np.append(Gain,g_Gain)
             IncidenceAngle=np.append(IncidenceAngle,g_IncidenceAngle)
+            SPlat=np.append(SPlat,g_SPlat)
+            SPlon=np.append(SPlon,g_SPlon)
+            
+            mask=np.logical_and((g_SNR>=SNR_Min) ,(g_SNR<SNR_Max) ,
+                  (g_Gain>=Gain_Min) , (g_Gain<=Gain_Max) , 
+                  (g_IncidenceAngle>=Incidence_Min) ,
+                  (g_IncidenceAngle<=Incidence_Max))
+            g_N=mask.sum()
+            ddm_count=ddm_count+g_N
+            
             g_ddm=np.array(DDM_nc.groups[group_name].variables["DDM"])
-            if(idx==0):
+            g_ddm=g_ddm[mask,:,:]
+            if(ddm_count==0 and g_N!=0):
                 DDMs=g_ddm
             else:
                 DDMs=np.append(DDMs,g_ddm,axis=0)

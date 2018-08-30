@@ -30,15 +30,36 @@ class DDM:
         IncidenceAngle=np.zeros(0)
         SPlat=np.zeros(0)
         SPlon=np.zeros(0)
+        SpecularPathRangeOffset=np.zeros(0)
         ddm_count=0
-        for group_name in group_str:
-            g=metadata.groups[group_name].variables
+        firstgroup=metadata.groups[group_str[0]]
+        
+        TrackingOffsetDelayInPixels=np.zeros(N_groups)
+        TrackingOffsetDopplerHz=np.zeros(N_groups)
+        DopplerResolution=np.zeros(N_groups)
+        #Attributes
+        self.DelayResolution=firstgroup.DelayResolution
+        self.DopplerResolution=firstgroup.DopplerResolution
+        self.NumberOfDelayPixels=firstgroup.NumberOfDelayPixels
+        self.NumberOfDopplerPixels=firstgroup.NumberOfDopplerPixels
+        self.TrackingOffsetDelayInPixels=firstgroup.TrackingOffsetDelayInPixels
+        self.TrackingOffsetDopplerHz=firstgroup.TrackingOffsetDopplerHz
+        self.TrackingOffsetDopplerInPixels=firstgroup.TrackingOffsetDopplerInPixels
+        DDMs_stack=[]
+        for (group_num,group_name) in zip(group_num,group_str):
+            grp=metadata.groups[group_name]
+            TrackingOffsetDelayInPixels[group_num]=grp.TrackingOffsetDelayInPixels
+            TrackingOffsetDopplerHz[group_num]=grp.TrackingOffsetDopplerHz
+            DopplerResolution[group_num]=grp.DopplerResolution
+            g=grp.variables
+            
             g_SNR=np.array(g["DDMSNRAtPeakSingleDDM"])            
             g_Gain=np.array(g["AntennaGainTowardsSpecularPoint"])
             g_IncidenceAngle=np.array(g["SPIncidenceAngle"])
             g_SPlat=np.array(g["SpecularPointLat"])
             g_SPlon=np.array(g["SpecularPointLon"])
-
+            g_SpecularPathRangeOffset=np.array(g["SpecularPathRangeOffset"])
+            
             mask=g_SNR>=SNR_Min
             mask=np.logical_and(mask,g_SNR<SNR_Max)
             mask=np.logical_and(mask,g_Gain>=Gain_Min)
@@ -53,21 +74,58 @@ class DDM:
                 IncidenceAngle=np.append(IncidenceAngle,g_IncidenceAngle[mask])
                 SPlat=np.append(SPlat,g_SPlat[mask])
                 SPlon=np.append(SPlon,g_SPlon[mask])
+                SpecularPathRangeOffset=np.append(SpecularPathRangeOffset,g_SpecularPathRangeOffset[mask])
                 g_ddm=np.array(DDM_nc.groups[group_name].variables["DDM"])
                 g_ddm=g_ddm[mask,:,:]
-                if(ddm_count==0):
-                    DDMs=g_ddm
-                else:
-                    DDMs=np.append(DDMs,g_ddm,axis=0)
+#                if(ddm_count==0):
+#                    DDMs=g_ddm
+#                else:
+#                    DDMs=np.append(DDMs,g_ddm,axis=0)
+                DDMs_stack.append(g_ddm)
             else:
                 pass
             ddm_count+=g_N
+        DDMs=np.concatenate(DDMs_stack,axis=0)
+        self.N=ddm_count
         self.DDMs=DDMs
         self.SNR=SNR
         self.IncidenceAngle=IncidenceAngle
         self.Gain=Gain
+        self.SpecularPathRangeOffset=SpecularPathRangeOffset
         metadata.close()
         DDM_nc.close()
+    def DDMA(self,DopplerWinWidth,DelayWinWitdth,DopplerUnit='pixel',DelayUnit='pixel'):
+        '''
+        Calculte the Delay Doppler Map Average near the DDM centre
+        DopplerWinWidth: Doppler window width
+        DelayWinWitdth： width of Delay window
+        '''
+        NDoP=self.NumberOfDopplerPixels
+        if DopplerUnit=='pixel':
+            w_Do=DopplerWinWidth//2
+            C_Do=NDoP//2
+
+        elif DopplerUnit=='Hz':
+            w_Do=DopplerWinWidth/self.DopplerResolution//2
+            C_Do=NDoP//2
+        else:
+            raise RuntimeError('Illegal parameter value in DopplerUnit : {}'.format(DopplerUnit))
+        min_Do=C_Do-w_Do
+        max_Do=C_Do+w_Do+1
+        if DelayUnit=='ns':
+            w_De=DelayWinWitdth/self.DelayResolution//2
+        elif DelayUnit=='pixel':
+            w_De=DelayWinWitdth//2
+           # C_De=TrackingOffsetDelayInPixels-
+        else:
+            raise RuntimeError('Illegal parameter value in Delay Unit : {}'.format(DelayUnit))
+        DDMslice=self.DDMs[:,min_Do:max_Do,:]
+        De_min=(self.TrackingOffsetDelayInPixels-self.SpecularPathRangeOffset/self.DelayResolution-w_De).astype(np.int32)
+        De_max=(self.TrackingOffsetDelayInPixels-self.SpecularPathRangeOffset/self.DelayResolution+w_De+1).astype(np.int32)
+        ddma=[np.mean(DDMslice[i,:,De_min[i]:De_max[i]]) for i in np.arange(self.N)]
+        ddma=np.array(ddma)
+        return ddma
+    
 #%% x,y,z to latitude , longitude and altitude
 def xyz2latlon(x,y,z):
     #x,y,z to latitude , longitude and altitude
@@ -101,5 +159,3 @@ def xyz2latlon(x,y,z):
     e_p = (R_0/R_P)*e;
     lat = np.arctan((z + z_0*(e_p)**2)/p)*(180/np.pi);
     return lon,lat,alt
-
-

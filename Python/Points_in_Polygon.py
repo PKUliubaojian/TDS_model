@@ -13,7 +13,7 @@ from pandas import DataFrame,Series
 
 def pixelswithin(Lon,Lat,source="land"):
     '''Points in shapeflie'''
-    if source in ['land']:
+    if source in ['land','ocean']:
         path="shp\\ne_110m_land\\ne_110m_land.shp"
 
     elif source=='lake':
@@ -26,5 +26,7 @@ def pixelswithin(Lon,Lat,source="land"):
     shapes=gpd.read_file(path)
     union=shapes["geometry"].unary_union
     pts_in=pts.geometry.within(union)
+    if source=='ocean':
+        pts_in=~pts_in
     return pts_in
         

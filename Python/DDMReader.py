@@ -5,18 +5,16 @@ Created on Mon Aug 27 13:15:27 2018
 @author: RS101
 """
 
-import netCDF4 as nc
 import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
 from netCDF4 import Dataset
 import os
-from pandas import DataFrame,Series
-
+import geopandas as gpd
+from shapely.geometry import Point
+from pandas import DataFrame
 #%%Read specified DDMs
 class DDM:
     def __init__(self,DDMfolder,SNR_Min=0,SNR_Max=50,Incidence_Min=0,Incidence_Max=90,
-                 Gain_Min=-20,Gain_Max=30,SP_class='ocean'):
+                 Gain_Min=-20,Gain_Max=30,SP_class='all'):
         "D:\\data\\GNSS\\TDS\\L1B\\2015-09\\09\\H00"
         fileDDMs=os.path.join(DDMfolder,"DDMs.nc")
         filemetadata=os.path.join(DDMfolder,"metadata.nc")
@@ -68,6 +66,10 @@ class DDM:
             mask=np.logical_and(mask,g_IncidenceAngle>=Incidence_Min)
             mask=np.logical_and(mask,g_IncidenceAngle<=Incidence_Max)
             g_N=mask.sum()
+            if SP_class=='all':
+                pass
+            else:
+                mask[mask]=SPwithin(g_SPlon[mask],g_SPlat[mask],SP_class)
             if(g_N>0):
                 SNR=np.append(SNR,g_SNR[mask])
                 Gain=np.append(Gain,g_Gain[mask])
@@ -131,10 +133,8 @@ def xyz2latlon(x,y,z):
     #x,y,z to latitude , longitude and altitude
     f = 1/298.257223563;        #   WGS-84 Flattening.
     e = np.sqrt(f*(2 - f));        #   Eccentricity.
-    omega_ie = 7.292115e5;      #   WGS-84 Earth rate (rad/s).
     R_0 = 6378137;              #   WGS-84 equatorial radius (m).                            
     R_P = R_0*(1 - f);          #   Polar radius (m).
-    mu_E = 3.986004418e14;      #   WGS-84 Earth's gravitational
     lon = np.arctan2(y,x)*(180/np.pi);
     p=np.linalg.norm(np.c_[x,y],axis=1)
     E=np.sqrt(R_0**2-R_P**2)
@@ -143,7 +143,7 @@ def xyz2latlon(x,y,z):
     c = e**4*F*p**2/G**3;
     s = (1 + c + np.sqrt(c**2 + 2*c))**(1/3);
     P = (F/(3*G**2))/((s + (1/s) + 1)**2);
-    Q = sqrt(1 + 2*e**4*P);
+    Q = np.sqrt(1 + 2*e**4*P);
     k_1 = -P*e**2*p/(1 + Q);
     k_2 = 0.5*R_0**2*(1 + 1/Q);
     k_3 = -P*(1 - e**2)*z**2/(Q*(1 + Q));
@@ -153,9 +153,31 @@ def xyz2latlon(x,y,z):
     U = np.sqrt(k_5**2 + z**2);
     V = np.sqrt(k_5**2 + (1 - e**2)*z**2);
     alt = U*(1 - (R_P**2/(R_0*V)));
-    #   Compute additional values required for computing
-    #   latitude
     z_0 = (R_P**2*z)/(R_0*V);
     e_p = (R_0/R_P)*e;
     lat = np.arctan((z + z_0*(e_p)**2)/p)*(180/np.pi);
     return lon,lat,alt
+#%%If a secular point is in land,lake or ocean
+def SPwithin(Lon,Lat,source="land"):
+    '''
+    Find specular Points in land,lake,or ocean
+    Return a list of boolean
+    source : 'land','lake',or'ocean',or shapefile path provided by user's
+    '''
+    if source in ['land','ocean']:
+        path="shp\\ne_110m_land\\ne_110m_land.shp"
+
+    elif source=='lake':
+        path="shp\\ne_10m_lakes\\ne_10m_lakes.shp"
+    else:
+        path=source
+    df=DataFrame({"Coordinates":list(zip(Lon,Lat))})
+    df['Coordinates'] = df['Coordinates'].apply(Point)
+    pts = gpd.GeoDataFrame(df, geometry='Coordinates')
+    shapes=gpd.read_file(path)
+    union=shapes["geometry"].unary_union
+    pts_in=pts.geometry.within(union)
+    if source=='ocean':
+        pts_in=~pts_in
+    return pts_in
+        

@@ -65,11 +65,11 @@ class DDM:
             mask=np.logical_and(mask,g_SNR<SNR_Max)
             mask=np.logical_and(mask,g_IncidenceAngle>=Incidence_Min)
             mask=np.logical_and(mask,g_IncidenceAngle<=Incidence_Max)
-            g_N=mask.sum()
             if SP_class=='all':
                 pass
             else:
                 mask[mask]=SPwithin(g_SPlon[mask],g_SPlat[mask],SP_class)
+            g_N=mask.sum()
             if(g_N>0):
                 SNR=np.append(SNR,g_SNR[mask])
                 Gain=np.append(Gain,g_Gain[mask])

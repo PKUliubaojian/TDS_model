@@ -30,7 +30,6 @@ class DDM:
         SPlat=np.zeros(0)
         SPlon=np.zeros(0)
         SpecularPathRangeOffset=np.zeros(0)
-        ddm_count=0
         firstgroup=metadata.groups[group_str[0]]
         
         TrackingOffsetDelayInPixels=np.zeros(N_groups)
@@ -85,7 +84,7 @@ class DDM:
         else:
             mask=SPwithin(SPlon,SPlat,SP_class)
             DDMs=DDMs[mask,:,:]
-        self.N=ddm_count
+        self.N=DDMs.shape[0]
         self.DDMs=DDMs
         self.SNR=SNR
         self.IncidenceAngle=IncidenceAngle
@@ -93,38 +92,79 @@ class DDM:
         self.SpecularPathRangeOffset=SpecularPathRangeOffset
         metadata.close()
         DDM_nc.close()
-    def DDMA(self,DopplerWinWidth,DelayWinWitdth,DopplerUnit='pixel',DelayUnit='pixel'):
+    
+    def __repr__(self):
+        return "Dataset of %d Delay Doppler Maps"%self.N
+    
+#%% Delay Doppler Maximum Average
+    def DDMA(self,DopplerWinWidth=3,DelayWinWitdth=3,DopplerUnit='pixel',DelayUnit='pixel'):
         '''
         Calculte the Delay Doppler Map Average near the DDM centre
         DopplerWinWidth: Doppler window width
         DelayWinWitdth： width of Delay window
         '''
-        NDoP=self.NumberOfDopplerPixels
         if DopplerUnit=='pixel':
             w_Do=DopplerWinWidth//2
-            C_Do=NDoP//2
-
         elif DopplerUnit=='Hz':
             w_Do=DopplerWinWidth/self.DopplerResolution//2
-            C_Do=NDoP//2
         else:
             raise RuntimeError('Illegal parameter value in DopplerUnit : {}'.format(DopplerUnit))
-        min_Do=C_Do-w_Do
-        max_Do=C_Do+w_Do+1
         if DelayUnit=='ns':
             w_De=DelayWinWitdth/self.DelayResolution//2
+        elif DelayUnit=='mus':
+            w_De=DelayWinWitdth*1000/self.DelayResolution//2
+        
         elif DelayUnit=='pixel':
             w_De=DelayWinWitdth//2
-           # C_De=TrackingOffsetDelayInPixels-
         else:
             raise RuntimeError('Illegal parameter value in Delay Unit : {}'.format(DelayUnit))
-        DDMslice=self.DDMs[:,min_Do:max_Do,:]
-        De_min=(self.TrackingOffsetDelayInPixels-self.SpecularPathRangeOffset/self.DelayResolution-w_De).astype(np.int32)
-        De_max=(self.TrackingOffsetDelayInPixels-self.SpecularPathRangeOffset/self.DelayResolution+w_De+1).astype(np.int32)
-        ddma=[np.mean(DDMslice[i,:,De_min[i]:De_max[i]]) for i in np.arange(self.N)]
+        DDMmax=np.where(self.DDMs==65535)
+        unique,ix=np.unique(DDMmax[0],return_index=True)
+        Doc=DDMmax[1][ix]
+        Dec=DDMmax[2][ix]
+        Do_min=Doc-w_Do
+        Do_max=Doc+w_Do+1
+        De_min=Dec-w_De
+        De_max=Dec+w_De+1
+        ddma=[np.mean(self.DDMs[i,Do_min[i]:Do_max[i],De_min[i]:De_max[i]]) for i in np.arange(self.N)]
         ddma=np.array(ddma)
-        return ddma
+        return ddma/65535
     
+    #%%   DDM slice in Delay axis,Leading edge slope, and Trailing edge slope
+    def DelaySlice(self,option='Max'):
+        if option=='Max':
+            return np.max(self.DDMs,axis=1)
+        elif option=='Interpolate':
+            return np.sum(self.DDMs,axis=1)
+        elif option=='Center':
+            return self.DDMs[:,self.NumberOfDopplerPixels//2,:]
+        else:
+            raise RuntimeError('Illegal option : {}'.format(option))
+    
+
+    def LES(self,DelayWinWitdth,DelayUnit='pixel',option='Interpolate'):
+        if DelayUnit=='pixel':
+            w=DelayWinWitdth
+        ddmslice=self.DelaySlice(option=option)
+        xlocate=np.arange(ddmslice.shape[0])
+        maxlocation=np.argmax(ddmslice,axis=1)
+        maxlocation=np.where(maxlocation<w,
+                             w,maxlocation)
+        dif=ddmslice[xlocate,maxlocation]-ddmslice[xlocate,maxlocation-w]
+        return dif/65535
+
+    def TES(self,DelayWinWitdth,DelayUnit='pixel',option='Interpolate'):
+        if DelayUnit=='pixel':
+            w=DelayWinWitdth
+        ddmslice=self.DelaySlice(option=option)
+        xlocate=np.arange(ddmslice.shape[0])
+        maxlocation=np.argmax(ddmslice,axis=1)
+        maxlocation=np.where(maxlocation>ddmslice.shape[1]-w-1,
+                             ddmslice.shape[1]-w-1,maxlocation)
+        dif=ddmslice[xlocate,maxlocation]-ddmslice[xlocate,maxlocation+w]
+        return dif/65535
+    
+        
 #%% x,y,z to latitude , longitude and altitude
 def xyz2latlon(x,y,z):
     #x,y,z to latitude , longitude and altitude

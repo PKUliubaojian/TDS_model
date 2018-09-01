@@ -131,7 +131,7 @@ class DDM:
         return ddma/65535
     
     #%%   DDM slice in Delay axis,Leading edge slope, and Trailing edge slope
-    def DelaySlice(self,option='Max'):
+    def DelaySlice(self,option='Interpolate'):
         if option=='Max':
             return np.max(self.DDMs,axis=1)
         elif option=='Interpolate':
@@ -146,7 +146,7 @@ class DDM:
         if DelayUnit=='pixel':
             w=DelayWinWitdth
         ddmslice=self.DelaySlice(option=option)
-        xlocate=np.arange(ddmslice.shape[0])
+        xlocate=np.arange(self.N)
         maxlocation=np.argmax(ddmslice,axis=1)
         maxlocation=np.where(maxlocation<w,
                              w,maxlocation)
@@ -157,14 +157,31 @@ class DDM:
         if DelayUnit=='pixel':
             w=DelayWinWitdth
         ddmslice=self.DelaySlice(option=option)
-        xlocate=np.arange(ddmslice.shape[0])
+        xlocate=np.arange(self.N)
         maxlocation=np.argmax(ddmslice,axis=1)
         maxlocation=np.where(maxlocation>ddmslice.shape[1]-w-1,
                              ddmslice.shape[1]-w-1,maxlocation)
         dif=ddmslice[xlocate,maxlocation]-ddmslice[xlocate,maxlocation+w]
         return dif/65535
     
-        
+    def cor_WAF(self):
+        '''
+        The correlation coefficient with woodward ambiguty function
+        '''
+        waf=np.array([0,0,0,0.25,0.5,0.75,1,0.75,0.5,0.25,0,0,0])
+        ddmslice=self.DelaySlice()
+        w=6
+        xlocate=np.arange(self.N)
+        maxlocation=np.argmax(ddmslice,axis=1)
+        maxlocation=np.where(maxlocation<w,w,maxlocation)
+        maxlocation=np.where(maxlocation>ddmslice.shape[1]-w-1,
+                             ddmslice.shape[1]-w-1,maxlocation)
+        corr_waf=np.zeros(self.N)
+        for i,j in list(zip(xlocate,maxlocation)):
+            signal=ddmslice[i,j-w:j+w+1]
+            corr_waf[i]=np.corrcoef(signal,waf)[0,1]
+        return corr_waf
+    
 #%% x,y,z to latitude , longitude and altitude
 def xyz2latlon(x,y,z):
     #x,y,z to latitude , longitude and altitude

@@ -11,6 +11,7 @@ import os
 import geopandas as gpd
 from shapely.geometry import Point
 from pandas import DataFrame
+import PIL
 #%%Read specified DDMs
 class DDM:
     def __init__(self,DDMfolder,SNR_Min=0,SNR_Max=50,Incidence_Min=0,Incidence_Max=90,
@@ -65,10 +66,6 @@ class DDM:
             mask=np.logical_and(mask,g_SNR<SNR_Max)
             mask=np.logical_and(mask,g_IncidenceAngle>=Incidence_Min)
             mask=np.logical_and(mask,g_IncidenceAngle<=Incidence_Max)
-            if SP_class=='all':
-                pass
-            else:
-                mask[mask]=SPwithin(g_SPlon[mask],g_SPlat[mask],SP_class)
             g_N=mask.sum()
             if(g_N>0):
                 SNR=np.append(SNR,g_SNR[mask])
@@ -79,15 +76,15 @@ class DDM:
                 SpecularPathRangeOffset=np.append(SpecularPathRangeOffset,g_SpecularPathRangeOffset[mask])
                 g_ddm=np.array(DDM_nc.groups[group_name].variables["DDM"])
                 g_ddm=g_ddm[mask,:,:]
-#                if(ddm_count==0):
-#                    DDMs=g_ddm
-#                else:
-#                    DDMs=np.append(DDMs,g_ddm,axis=0)
                 DDMs_stack.append(g_ddm)
             else:
                 pass
-            ddm_count+=g_N
         DDMs=np.concatenate(DDMs_stack,axis=0)
+        if SP_class=='all':
+            pass
+        else:
+            mask=SPwithin(SPlon,SPlat,SP_class)
+            DDMs=DDMs[mask,:,:]
         self.N=ddm_count
         self.DDMs=DDMs
         self.SNR=SNR
@@ -162,13 +159,23 @@ def SPwithin(Lon,Lat,source="land"):
     '''
     Find specular Points in land,lake,or ocean
     Return a list of boolean
-    source : 'land','lake',or'ocean',or shapefile path provided by user's
+    source : 'land','lake',or'ocean','water',or shapefile path provided by user
+    'water' is recommended to use due its less calculation time
     '''
+    Lon=np.asarray(Lon)
+    Lat=np.asarray(Lat)
     if source in ['land','ocean']:
         path="shp\\ne_110m_land\\ne_110m_land.shp"
 
     elif source=='lake':
         path="shp\\ne_10m_lakes\\ne_10m_lakes.shp"
+    
+    elif source=='water'    :
+        #downloaded from https://www.ngdc.noaa.gov/mgg/global/relief/ETOPO1/data/ice_surface/grid_registered/georeferenced_tiff/
+         watermask=np.load("data/WaterMask.npy")
+         Lonindex=((Lon+180)*30).astype(np.int32)
+         Latindex=((Lat+90)*30).astype(np.int32)
+         return watermask[Latindex,Lonindex]
     else:
         path=source
     df=DataFrame({"Coordinates":list(zip(Lon,Lat))})

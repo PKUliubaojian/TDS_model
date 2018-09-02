@@ -40,9 +40,6 @@ class DDM:
         self.DopplerResolution=firstgroup.DopplerResolution
         self.NumberOfDelayPixels=firstgroup.NumberOfDelayPixels
         self.NumberOfDopplerPixels=firstgroup.NumberOfDopplerPixels
-        self.TrackingOffsetDelayInPixels=firstgroup.TrackingOffsetDelayInPixels
-        self.TrackingOffsetDopplerHz=firstgroup.TrackingOffsetDopplerHz
-        self.TrackingOffsetDopplerInPixels=firstgroup.TrackingOffsetDopplerInPixels
         DDMs_stack=[]
         for (group_num,group_name) in zip(group_num,group_str):
             grp=metadata.groups[group_name]
@@ -77,15 +74,15 @@ class DDM:
                 DDMs_stack.append(g_ddm)
             else:
                 pass
-        DDMs=np.concatenate(DDMs_stack,axis=0)
-        self.DDMs=DDMs
+        Wave=np.concatenate(DDMs_stack,axis=0)
+        self.Wave=Wave
         self.SNR=SNR
         self.IncidenceAngle=IncidenceAngle
         self.Gain=Gain
         self.SpecularPathRangeOffset=SpecularPathRangeOffset
         self.Lat=SPlat
         self.Lon=SPlon
-        self.N=DDMs.shape[0]
+        self.N=self.Wave.shape[0]
         if SP_class=='all':
             pass
         else:
@@ -100,14 +97,14 @@ class DDM:
         self.UpdateBymask(mask)
     
     def UpdateBymask(self,mask):
-        self.DDMs=self.DDMs[mask,:,:]
+        self.Wave=self.Wave[mask,:,:]
         self.SNR=self.SNR[mask]
         self.IncidenceAngle=self.IncidenceAngle[mask]
         self.Gain=self.Gain[mask]
         self.SpecularPathRangeOffset=self.SpecularPathRangeOffset[mask]
         self.Lat=self.Lat[mask]
         self.Lon=self.Lon[mask]
-        self.N=self.DDMs.shape[0]
+        self.N=self.Wave.shape[0]
         
     def __repr__(self):
         return "Dataset of %d Delay Doppler Maps"%self.N
@@ -134,7 +131,7 @@ class DDM:
             w_De=DelayWinWitdth//2
         else:
             raise RuntimeError('Illegal parameter value in Delay Unit : {}'.format(DelayUnit))
-        DDMmax=np.where(self.DDMs==65535)
+        DDMmax=np.where(self.Wave==65535)
         unique,ix=np.unique(DDMmax[0],return_index=True)
         Doc=DDMmax[1][ix]
         Dec=DDMmax[2][ix]
@@ -142,18 +139,18 @@ class DDM:
         Do_max=Doc+w_Do+1
         De_min=Dec-w_De
         De_max=Dec+w_De+1
-        ddma=[np.mean(self.DDMs[i,Do_min[i]:Do_max[i],De_min[i]:De_max[i]]) for i in np.arange(self.N)]
+        ddma=[np.mean(self.Wave[i,Do_min[i]:Do_max[i],De_min[i]:De_max[i]]) for i in np.arange(self.N)]
         ddma=np.array(ddma)
         return ddma/65535
     
     #%%   DDM slice in Delay axis,Leading edge slope, and Trailing edge slope
     def DelaySlice(self,option='Interpolate'):
         if option=='Max':
-            return np.max(self.DDMs,axis=1)
+            return np.max(self.Wave,axis=1)
         elif option=='Interpolate':
-            return np.sum(self.DDMs,axis=1)
+            return np.sum(self.Wave,axis=1)
         elif option=='Center':
-            return self.DDMs[:,self.NumberOfDopplerPixels//2,:]
+            return self.Wave[:,self.NumberOfDopplerPixels//2,:]
         else:
             raise RuntimeError('Illegal option : {}'.format(option))
     
@@ -265,4 +262,4 @@ def DEMfilter(Lon,Lat,DEMmax=600):
     DEMglobe=np.load(dempath)
     Lonindex=((Lon+180)*10).astype(np.int32)
     Latindex=((Lat+90)*10).astype(np.int32)
-    return DEMglobe[Latindex,Lonindex]*100<=DEMmax
+    return DEMglobe[Latindex,Lonindex]<=DEMmax

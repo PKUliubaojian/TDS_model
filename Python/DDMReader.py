@@ -16,7 +16,7 @@ import PIL
 class DDM:
     def __init__(self,DDMfolder,SNR_Min=0,SNR_Max=50,Incidence_Min=0,Incidence_Max=90,
                  Gain_Min=-20,Gain_Max=30,SP_class='all'):
-        "D:\\data\\GNSS\\TDS\\L1B\\2015-09\\09\\H00"
+        
         fileDDMs=os.path.join(DDMfolder,"DDMs.nc")
         filemetadata=os.path.join(DDMfolder,"metadata.nc")
         metadata=Dataset(filemetadata,'r')
@@ -65,8 +65,7 @@ class DDM:
             mask=np.logical_and(mask,g_SNR<SNR_Max)
             mask=np.logical_and(mask,g_IncidenceAngle>=Incidence_Min)
             mask=np.logical_and(mask,g_IncidenceAngle<=Incidence_Max)
-            g_N=mask.sum()
-            if(g_N>0):
+            if(any(mask)):
                 SNR=np.append(SNR,g_SNR[mask])
                 Gain=np.append(Gain,g_Gain[mask])
                 IncidenceAngle=np.append(IncidenceAngle,g_IncidenceAngle[mask])
@@ -79,20 +78,37 @@ class DDM:
             else:
                 pass
         DDMs=np.concatenate(DDMs_stack,axis=0)
-        if SP_class=='all':
-            pass
-        else:
-            mask=SPwithin(SPlon,SPlat,SP_class)
-            DDMs=DDMs[mask,:,:]
-        self.N=DDMs.shape[0]
         self.DDMs=DDMs
         self.SNR=SNR
         self.IncidenceAngle=IncidenceAngle
         self.Gain=Gain
         self.SpecularPathRangeOffset=SpecularPathRangeOffset
+        self.Lat=SPlat
+        self.Lon=SPlon
+        self.N=DDMs.shape[0]
+        if SP_class=='all':
+            pass
+        else:
+            mask=SPwithin(SPlon,SPlat,SP_class)
+            self.UpdateBymask(mask)
+
         metadata.close()
         DDM_nc.close()
+        
+    def ExecuteFilter(self,DEMmax=600):
+        mask=DEMfilter(self.Lon,self.Lat,DEMmax)
+        self.UpdateBymask(mask)
     
+    def UpdateBymask(self,mask):
+        self.DDMs=self.DDMs[mask,:,:]
+        self.SNR=self.SNR[mask]
+        self.IncidenceAngle=self.IncidenceAngle[mask]
+        self.Gain=self.Gain[mask]
+        self.SpecularPathRangeOffset=self.SpecularPathRangeOffset[mask]
+        self.Lat=self.Lat[mask]
+        self.Lon=self.Lon[mask]
+        self.N=self.DDMs.shape[0]
+        
     def __repr__(self):
         return "Dataset of %d Delay Doppler Maps"%self.N
     
@@ -216,23 +232,22 @@ def SPwithin(Lon,Lat,source="land"):
     '''
     Find specular Points in land,lake,or ocean
     Return a list of boolean
-    source : 'land','lake',or'ocean','water',or shapefile path provided by user
+    source : 'land','lake','water',or shapefile path provided by user
     'water' is recommended to use due its less calculation time
     '''
     Lon=np.asarray(Lon)
     Lat=np.asarray(Lat)
-    if source in ['land','ocean']:
-        path="shp\\ne_110m_land\\ne_110m_land.shp"
-
-    elif source=='lake':
-        path="shp\\ne_10m_lakes\\ne_10m_lakes.shp"
-    
-    elif source=='water'    :
+    if source in ['water','land']:
         #downloaded from https://www.ngdc.noaa.gov/mgg/global/relief/ETOPO1/data/ice_surface/grid_registered/georeferenced_tiff/
          watermask=np.load("data/WaterMask.npy")
          Lonindex=((Lon+180)*30).astype(np.int32)
          Latindex=((Lat+90)*30).astype(np.int32)
-         return watermask[Latindex,Lonindex]
+         if source=='land':
+             return ~watermask[Latindex,Lonindex]
+         else:
+             return watermask[Latindex,Lonindex]
+    elif source=='lake':
+        path="shp\\ne_10m_lakes\\ne_10m_lakes.shp"
     else:
         path=source
     df=DataFrame({"Coordinates":list(zip(Lon,Lat))})
@@ -241,7 +256,13 @@ def SPwithin(Lon,Lat,source="land"):
     shapes=gpd.read_file(path)
     union=shapes["geometry"].unary_union
     pts_in=pts.geometry.within(union)
-    if source=='ocean':
-        pts_in=~pts_in
+    
+
     return pts_in
-        
+
+def DEMfilter(Lon,Lat,DEMmax=600):
+    dempath='data/dem_10km.npy'
+    DEMglobe=np.load(dempath)
+    Lonindex=((Lon+180)*10).astype(np.int32)
+    Latindex=((Lat+90)*10).astype(np.int32)
+    return DEMglobe[Latindex,Lonindex]*100<=DEMmax

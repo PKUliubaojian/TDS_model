@@ -16,6 +16,9 @@ import PIL
 class DDM:
     def __init__(self,DDMfolder,SNR_Min=0,SNR_Max=50,Incidence_Min=0,Incidence_Max=90,
                  Gain_Min=-20,Gain_Max=30,SP_class='all'):
+        """
+        Read the nc file and select DDMs using filter by user's definition
+        """
         "D:\\data\\GNSS\\TDS\\L1B\\2015-09\\09\\H00"
         fileDDMs=os.path.join(DDMfolder,"DDMs.nc")
         filemetadata=os.path.join(DDMfolder,"metadata.nc")
@@ -98,11 +101,11 @@ class DDM:
     
 #%% Delay Doppler Maximum Average
     def DDMA(self,DopplerWinWidth=3,DelayWinWitdth=3,DopplerUnit='pixel',DelayUnit='pixel'):
-        '''
+        """
         Calculte the Delay Doppler Map Average near the DDM centre
         DopplerWinWidth: Doppler window width
         DelayWinWitdth： width of Delay window
-        '''
+        """
         if DopplerUnit=='pixel':
             w_Do=DopplerWinWidth//2
         elif DopplerUnit=='Hz':
@@ -140,51 +143,73 @@ class DDM:
             return self.DDMs[:,self.NumberOfDopplerPixels//2,:]
         else:
             raise RuntimeError('Illegal option : {}'.format(option))
-    
 
     def LES(self,DelayWinWitdth,DelayUnit='pixel',option='Interpolate'):
         if DelayUnit=='pixel':
             w=DelayWinWitdth
+        elif DelayUnit=='ns':
+            w=DelayWinWitdth/self.DelayResolution//2
+        elif DelayUnit=='mus':
+            w=DelayWinWitdth*1000/self.DelayResolution//2
+        else:
+            raise RuntimeError('Illegal parameter value in Delay Unit : {}'.format(DelayUnit))
         ddmslice=self.DelaySlice(option=option)
         xlocate=np.arange(self.N)
-        maxlocation=np.argmax(ddmslice,axis=1)
-        maxlocation=np.where(maxlocation<w,
-                             w,maxlocation)
-        dif=ddmslice[xlocate,maxlocation]-ddmslice[xlocate,maxlocation-w]
+        #coordinate of the max DDM
+        cor_max=np.argmax(ddmslice,axis=1)
+        cor_max=np.where(cor_max<w,
+                             w,cor_max)
+        dif=ddmslice[xlocate,cor_max]-ddmslice[xlocate,cor_max-w]
         return dif/65535
 
     def TES(self,DelayWinWitdth,DelayUnit='pixel',option='Interpolate'):
         if DelayUnit=='pixel':
             w=DelayWinWitdth
+        elif DelayUnit=='ns':
+            w=DelayWinWitdth/self.DelayResolution//2
+        elif DelayUnit=='mus':
+            w=DelayWinWitdth*1000/self.DelayResolution//2
+        else:
+            raise RuntimeError('Illegal parameter value in Delay Unit : {}'.format(DelayUnit))
         ddmslice=self.DelaySlice(option=option)
         xlocate=np.arange(self.N)
-        maxlocation=np.argmax(ddmslice,axis=1)
-        maxlocation=np.where(maxlocation>ddmslice.shape[1]-w-1,
-                             ddmslice.shape[1]-w-1,maxlocation)
-        dif=ddmslice[xlocate,maxlocation]-ddmslice[xlocate,maxlocation+w]
+        cor_max=np.argmax(ddmslice,axis=1)
+        cor_max=np.where(cor_max>ddmslice.shape[1]-w-1,
+                             ddmslice.shape[1]-w-1,cor_max)
+        dif=ddmslice[xlocate,cor_max]-ddmslice[xlocate,cor_max+w]
         return dif/65535
     
     def cor_WAF(self):
         '''
-        The correlation coefficient with woodward ambiguty function
+        The correlation coefficient with Woodward Ambiguty Function (WAF)
         '''
         waf=np.array([0,0,0,0.25,0.5,0.75,1,0.75,0.5,0.25,0,0,0])
         ddmslice=self.DelaySlice()
         w=6
         xlocate=np.arange(self.N)
-        maxlocation=np.argmax(ddmslice,axis=1)
-        maxlocation=np.where(maxlocation<w,w,maxlocation)
-        maxlocation=np.where(maxlocation>ddmslice.shape[1]-w-1,
-                             ddmslice.shape[1]-w-1,maxlocation)
+        cor_max=np.argmax(ddmslice,axis=1)
+        cor_max=np.where(cor_max<w,w,cor_max)
+        cor_max=np.where(cor_max>ddmslice.shape[1]-w-1,
+                             ddmslice.shape[1]-w-1,cor_max)
         corr_waf=np.zeros(self.N)
-        for i,j in list(zip(xlocate,maxlocation)):
+        for i,j in list(zip(xlocate,cor_max)):
             signal=ddmslice[i,j-w:j+w+1]
             corr_waf[i]=np.corrcoef(signal,waf)[0,1]
         return corr_waf
     
 #%% x,y,z to latitude , longitude and altitude
 def xyz2latlon(x,y,z):
-    #x,y,z to latitude , longitude and altitude
+    '''
+    conversion from x,y,z in Earth-Fixed Coordinate System 
+    x: m
+    y: m
+    z: m
+    to 
+    latitude  : degree
+    longitude : degree
+    altitude : m
+    in WGS-84 coordinate
+    '''
     f = 1/298.257223563;        #   WGS-84 Flattening.
     e = np.sqrt(f*(2 - f));        #   Eccentricity.
     R_0 = 6378137;              #   WGS-84 equatorial radius (m).                            

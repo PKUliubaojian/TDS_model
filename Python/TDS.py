@@ -11,9 +11,15 @@ import os
 import geopandas as gpd
 from shapely.geometry import Point
 from pandas import DataFrame
-import PIL
+
 #%%Read specified DDMs
 class DDM:
+"""
+    Read Delay Doppler Maps *.nc Files
+    Selected DDM by user's defined filter
+    Calculate parameters such as DDMA,Leading Edge Slope, Trailing Edge Slope and the correlation
+    coefficient with Woodward Ambiguty function
+"""
     def __init__(self,DDMfolder,SNR_Min=0,SNR_Max=50,Incidence_Min=0,Incidence_Max=90,
                  Gain_Min=-20,Gain_Max=30,SP_class='all'):
         """
@@ -62,7 +68,6 @@ class DDM:
             mask=np.logical_and(mask,g_SNR<SNR_Max)
             mask=np.logical_and(mask,g_Gain>=Gain_Min)
             mask=np.logical_and(mask,g_Gain<=Gain_Max)
-            mask=np.logical_and(mask,g_SNR<SNR_Max)
             mask=np.logical_and(mask,g_IncidenceAngle>=Incidence_Min)
             mask=np.logical_and(mask,g_IncidenceAngle<=Incidence_Max)
             if(any(mask)):
@@ -94,8 +99,26 @@ class DDM:
         metadata.close()
         DDM_nc.close()
         
-    def ExecuteFilter(self,DEMmax=600):
-        mask=DEMfilter(self.Lon,self.Lat,DEMmax)
+    def ExecuteFilter(self,SP_class='all',DEMmax=None,DEMmin=None,
+                      SNR_Min=-40,SNR_Max=40,
+                      Incidence_Min=0,Incidence_Max=90,
+                      Gain_Min=-20,Gain_Max=30):
+        if(SP_class=='all'):
+            class_mask=True
+        else:
+            class_mask=SPwithin(self.Lon,self.Lat,SP_class)
+        
+        DEM_mask=DEMfilter(self.Lon,self.Lat,DEMmax,DEMmin)
+        
+        
+        Othermask=(self.SNR>=SNR_Min)&(
+                self.SNR<SNR_Max)&(
+                self.Gain>=Gain_Min)&(
+                self.Gain<=Gain_Max)&(
+                self.IncidenceAngle>=Incidence_Min)&(
+                self.IncidenceAngle<=Incidence_Max)
+        
+        mask=class_mask & DEM_mask & Othermask
         self.UpdateBymask(mask)
     
     def UpdateBymask(self,mask):
@@ -285,9 +308,20 @@ def SPwithin(Lon,Lat,source="land"):
 
     return pts_in
 
-def DEMfilter(Lon,Lat,DEMmax=600):
-    dempath='data/dem_10km.npy'
-    DEMglobe=np.load(dempath)
-    Lonindex=((Lon+180)*10).astype(np.int32)
-    Latindex=((Lat+90)*10).astype(np.int32)
-    return DEMglobe[Latindex,Lonindex]<=DEMmax
+def DEMfilter(Lon,Lat,DEMmax=None,DEMmin=None):
+    if((DEMmax==None)&(DEMmin==None)):
+        return True
+    else:
+        dempath='data/dem_10km.npy'
+        DEMglobe=np.load(dempath)
+        Lonindex=((Lon+180)*10).astype(np.int32)
+        Latindex=((Lat+90)*10).astype(np.int32)
+        if(DEMmax!=None):
+            Maxmask=DEMglobe[Latindex,Lonindex]<=DEMmax
+        else:
+            Maxmask=True
+        if(DEMmin!=None):
+            Minmask=DEMglobe[Latindex,Lonindex]<=DEMmin
+        else:
+            Minmask=True 
+        return Maxmask & Minmask

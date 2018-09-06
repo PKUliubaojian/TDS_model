@@ -575,18 +575,61 @@ def salineicewithairbubbles(sal,T,rho,freq):
 def Purewater(T,freq):
     """
     The dielectric constant of pure water.
-    Background information: Chapter 4-2 in Microwave Radar and Radiometric Remote sensing, Ulaby et al.
+    Background information: Chapter 4-1 in Microwave Radar and Radiometric Remote sensing, Ulaby et al.
     eps = Purewater(T,freq)
         T:          temperature [K]
         freq:       frequency [GHz]
     """
     Tc=T-273.15
-    frequency=freq*1e9
+    freqHz=freq*1e9
     e_w0=88.045-0.4147*Tc+6.295e-4*Tc**2+1.075e-5*Tc**3
     e_wInfty=4.9
     #relaxation time
     tao_w_2pi=1.1109e-10-3.824e-12*Tc+6.938e-14*Tc**2-5.096e-16*Tc**3
     tao_w=tao_w_2pi/(2*np.pi)
     #relaxation frequency
-    eps=e_wInfty+(e_w0-e_wInfty)/(1+1j*2*np.pi*frequency*tao_w)
+    eps=e_wInfty+(e_w0-e_wInfty)/(1+1j*2*np.pi*freqHz*tao_w)
     return eps
+
+def Drysoil(rho):
+    """
+    The dielectric constant of dry soil.
+    Background information: Chapter 4-8 in Microwave Radar and Radiometric Remote sensing, Ulaby et al.
+    eps = Drysoil(rho)
+        rho:      soil bulk density [g/cm^3]
+    """
+    eps_i=(1+0.44*rho)**2
+    #Moreover, loss factor of soil<0.05
+    eps_ii=0.04
+    eps=eps_i-1j*eps_ii
+
+def Wetsoil(mv,T,freq,rho,S,C):
+    """
+    The dielectric constant of wet soil.
+    Background information: Chapter 4-8 in Microwave Radar and Radiometric Remote sensing, Ulaby et al.
+    eps = Wetsoil(mv,rho,S,C)
+    soil: water+sand+clay+silt
+         mv:    volumetric moisture
+          T:    temperature [K]
+       freq:    frequency [GHz]
+        rho:    soil bulk density [g/cm^3]
+          S:    the mass fractions of sand
+          C:    the mass fraction of clay
+    """
+    #emperically detemined parameters
+    alpha=0.65
+    beta1=1.27-0.519*S-0.152*C
+    beta2=2.06-0.928*S-0.255*C
+    freqHz=freq*1e9
+    #different sigma value from different model in different models (>1.4 GHz)
+    sigma_model1=-1.645+1.939*rho-2.256*S+1.594*C
+    sigma_model2=0.0467+0.22*rho-0.411*S+0.661*C
+    sigma=np.where(freq>=1.4 ,sigma_model1,sigma_model2)
+    # Vaccuum electric permittivity
+    e0=8.85419e-12 
+    eps_water=Purewater(T,freq)
+    epsi_water=eps_water.real
+    epsii_water=-eps_water.imag+(2.65-rho)/(2.65*mv)*sigma/(2*np.pi*e0*freqHz)
+    eps_i=(1+0.66*rho+(mv**beta1)*(epsi_water**alpha)-mv)**(1/alpha)
+    eps_ii=(mv**beta2)*epsii_water
+    return eps_i-1j*eps_ii

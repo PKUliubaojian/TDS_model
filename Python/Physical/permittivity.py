@@ -13,63 +13,16 @@ applications.
 import numpy as np
 import brine 
 
-def permittivity(rho,T,W,sal,sitype,freq):
-    """   
-    Compute the complex permittivity profile for snow and ice pack, with
-    profiles of changing density, salinity, temperature, wetness with depth, 
-    for a given frequency.
-    
-    eps = permittivity(freq,rho,T,W,sal,sitype)
-        epsi:   relative permittivity (real part of dielectric constant)
-        epsii:  dielectric loss factor (imaginary part of dielectric constant)
-        rho:    density [g/cm^3]
-        T:      temperature [K]
-        W:      wetness of snow
-        sal:    salinity profile
-        sitype: type of snow/ice
-        freq:   frequency [GHz]
-        
-    Uses: drysnow, wetsnow, salineicewithairbubbles
-    """
-    rho = np.array(rho)
-    T = np.array(T)
-    W = np.array(W)
-    sal = np.array(sal)
-    
-    # Initialize:
-    eps = np.complex(len(rho))
-
-    # For snow on the sea ice: 
-    # Assuming the same permittivity for either of the two snow types
-    mask = (sitype == 1)|(sitype == 2)
-    
-    # Dry, clean!, snow permittivity:    
-    eps[mask]= drysnow(rho[mask],T[mask],freq,'ImprovedBorn')    
-    # Adjust epsi and epsii if wet snow:
-    #epsi[mask], epsii[mask] = wetsnow(epsi[mask],epsii[mask],W[mask],rho[mask],freq,'Debye-like') # Probably better
-    eps[mask] = wetsnow(eps[mask],W[mask],rho[mask],freq,'original')
-
-    # For the ice: Permittivity depends on whether first-year (FY, type 3) 
-    # or multi-year (MY, type 4) sea ice.
-    # First-year sea ice: Sea ice with brine inclusions
-    mask = (sitype == 3)
-    # Setting rho = [] to indicate that there are no air inclusions.
-    eps[mask] = salineicewithairbubbles(sal[mask],T[mask],[],freq)
-        
-    # Multi-year sea ice: Sea ice with brine and air inclusions
-    mask = (sitype==4)
-    eps[mask] = salineicewithairbubbles(sal[mask],T[mask],rho[mask],freq)
-    return eps
 
 #%% Dry snow dielectric constant:
-def drysnow(rho,T,freq,method='Tinga-Voss-Blossey'):
+def Drysnow(rho,T,freq,method='Tinga-Voss-Blossey'):
     """
     Dielectric constant for clean, dry snow at various frequencies. 
     
     Real part only depends on density (and very weakly on temperature), while 
     imaginary part also depends on temperature and frequency.
     
-    eps = drysnow(rho,T,freq,method)
+    eps = Drysnow(rho,T,freq,method)
         epsi:   relative permittivity (real part of dielectric constant)
         epsii:  dielectric loss factor (imaginary part of dielectric constant)
         rho:    density [g/cm^3]
@@ -86,7 +39,7 @@ def drysnow(rho,T,freq,method='Tinga-Voss-Blossey'):
 
     # Dielectric constant of pure ice: 
     #??? Assuming clean snow, which is not realistic!! (for epsii_ice) - salinity will change this, but not dust
-    epsi_ice, epsii_ice = epureice(T,freq)
+    epsi_ice, epsii_ice = Pureice(T,freq)
    
     if method == 'Tinga-Voss-Blossey':
         # Using the Tinga-Voss-Blossey model for spherical inclusions: 
@@ -109,13 +62,13 @@ def drysnow(rho,T,freq,method='Tinga-Voss-Blossey'):
         # Using improved born approximation with spherical inclusions
         # (air is host material, with ice inclusions): 
         eps_air = 1
-        eps = sphericalinclusions(eps_air,eps_ice,vi,'ImprovedBorn')
+        eps = Sphericalinclusions(eps_air,eps_ice,vi,'ImprovedBorn')
         
     elif method == 'ImprovedBorn_shells':
         # Using improved born approximation with shell inclusions
         # (air is host material, with ice inclusions): 
         eps_air = 1
-        eps = sphericalinclusions(eps_air,eps_ice,vi,'ImprovedBorn_shells')
+        eps = Sphericalinclusions(eps_air,eps_ice,vi,'ImprovedBorn_shells')
         
     elif method == 'empirical':
         # Empirical relationship, from Matzler (2006)  (Ulaby & Long, eq. 4.55, p.141)
@@ -148,7 +101,7 @@ def drysnow(rho,T,freq,method='Tinga-Voss-Blossey'):
         A[mask] = 0.1 + 0.5*vi[mask]
     
         ei = 3.185  
-        A3 = 1.-2.*A
+        A3 = 1.-2*A
         ea = (epsi*(1-A))+A
         ea3 = epsi*(1-A3)+A3
         K1 = (ea/(ea+A*(ei-1)))**2
@@ -161,7 +114,7 @@ def drysnow(rho,T,freq,method='Tinga-Voss-Blossey'):
     return eps
 
 #%% Wet snow dielectric constant:
-def wetsnow(Wetness,rho,freq,method='Debye-like'):
+def Wetsnow(Wetness,rho,freq,method='Debye-like'):
     """
     The dielectric constant for wet snow (W>0). 
     
@@ -171,7 +124,7 @@ def wetsnow(Wetness,rho,freq,method='Debye-like'):
     The original model is a physical mixing model (Weise 97) after Matzler 1987 (corrected).
     Water temperature is assumed constant at 273.15 K. 
 
-        eps  =  wetsnow(epsi,epsii,W,freq,method)
+        eps  =  Wetsnow(epsi,epsii,W,freq,method)
         eps:    dielectric constant
         W:      liquid water content of snow or "snow wetness"; the volume 
                 fraction of liquid water in the snow mixture (values: 0-1)
@@ -229,13 +182,11 @@ def wetsnow(Wetness,rho,freq,method='Debye-like'):
         depsib = eub + eeb / (1+(fwb*freq)**2)
         depsic = euc + eec / (1+(fwc*freq)**2)
         depsi = W * (depsia+depsib+depsic)
-
         # Adjustment to loss factor (imaginary part):
         depsiia = fwa*freq*eea / (1+(fwa*freq)**2)
         depsiib = fwb*freq*eeb / (1+(fwb*freq)**2)
         depsiic = fwc*freq*eec / (1+(fwc*freq)**2)
         depsii = W * (depsiia+depsiib+depsiic)
-
         # Adjusted values:
         epsi = epsi + depsi
         epsii = epsii + depsii
@@ -243,7 +194,7 @@ def wetsnow(Wetness,rho,freq,method='Debye-like'):
     eps=epsi-1j* epsii
     return eps
 
-def epureice(T,freq,method='Hufford_corrected'):
+def Pureice(T,freq,method='Hufford_corrected'):
     """
     Dielectric permittivity of pure water ice.
     The relative permittivity is only very weakly temperature dependent. 
@@ -252,7 +203,7 @@ def epureice(T,freq,method='Hufford_corrected'):
     
     Note: There is some confusion where the various models are coming from.
     
-    eps_ice = epureice(T,freq,method)
+    eps_ice = Pureice(T,freq,method)
         epsice:  real part of dielectric permittivity
         epsiice: imaginary part of dielectric permittivity
         T:       temperature [K]
@@ -323,7 +274,7 @@ def epureice(T,freq,method='Hufford_corrected'):
     eps_ice=epsi_ice-1j*epsii_ice
     return eps_ice
 
-def ebrine(T,freq,method='StogrynDesargant'):
+def Brine(T,freq,method='StogrynDesargant'):
     """
     Permittivity of brine.
     Equations from Ulaby et al, 1986.
@@ -335,7 +286,7 @@ def ebrine(T,freq,method='StogrynDesargant'):
     For small salinity values (and temperatures close to 0oC), the saline-water 
     Double-Debye model (D3M) may be used for the permittivity calculations. 
     
-    eps_brine = ebrine(T, freq, method)
+    eps_brine = Brine(T, freq, method)
         epsbrine:     dielectric constant
         freq:         frequency [GHz]
         T:            temperature [K]
@@ -416,7 +367,7 @@ def ebrine(T,freq,method='StogrynDesargant'):
   
     return epsi_brine-1j*epsii_brine
 
-def salinewater(T,sal,freq):
+def Salinewater(T,sal,freq):
     """
     The Double-Debye Dielectric Model, D3M, developed for saline water.
     Applicability range: 0<T<30oC, 0<sal<40 psu, 0<freq<1000GHz.
@@ -425,7 +376,7 @@ def salinewater(T,sal,freq):
     (Ulaby&Long, p. 125). 
         
     eps = salinewater(T,sal,freq)
-        eps_brine:    dielectric constant
+        eps_brine:    dielectric constant of saline water
         T:            temperature [K]
         sal:          salinity [psu]
         freq:         frequency [GHz]
@@ -477,10 +428,10 @@ def salinewater(T,sal,freq):
     epsii = 2*np.pi*freq*tau_w1*(epsw0-epsw1)/(1+(2*np.pi*freq*tau_w1)**2) + \
         2*np.pi*freq*tau_w2*(epsw1-epswoo)/(1+(2*np.pi*freq*tau_w2)**2) + \
         sigma/(2*np.pi*e0*freq)
-        
-    return epsi-1j*epsii
+    eps=epsi-1j*epsii
+    return eps
 
-def randomneedles(ehost, einc, volinc,method='PolderVanSanten'):
+def Randomneedles(ehost, einc, volinc,method='PolderVanSanten'):
     """
     The effective dielectric constant of a mixture of clean sea ice 
     (host material) with inclusions of random brine needles. 
@@ -514,7 +465,7 @@ def randomneedles(ehost, einc, volinc,method='PolderVanSanten'):
     
                 f1=(einc[i]-ehost[i])/(einc[i]+emix)
                 f2=5.0*emix+einc[i]
-                emix_new = ehost[i]+volinc[i]/3.*f1*f2
+                emix_new = ehost[i]+volinc[i]/3*f1*f2
         
                 # Check for convergence:
                 measurea=abs(emix.real-emix_new.real)
@@ -524,7 +475,7 @@ def randomneedles(ehost, einc, volinc,method='PolderVanSanten'):
         emix = ehost + volinc/3*(einc-ehost)*(ehost*(5+volinc)+(1-volinc)*einc)/(ehost*(1+volinc)+einc*(1-volinc))          
     return emix
 
-def sphericalinclusions(ehost,einc,volinc,method='ImprovedBorn'):
+def Sphericalinclusions(ehost,einc,volinc,method='ImprovedBorn'):
     """
     It can e.g. be computed using the Polder-Van Santen/de Loor mixing formulae for 
     spherical inclusions, or the improved born approximation as given by 
@@ -533,13 +484,10 @@ def sphericalinclusions(ehost,einc,volinc,method='ImprovedBorn'):
     There is significant difference, and likely the Polder Van Santen 
     implementation is incorrect. 
     
-    [epsi_mix,epsii_mix] = spherical inclusions(epsi_host, epsii_host, epsi_inc, epsii_inc, volinc)
-        epsi_mix:   relative permittivity of mixture (real part of dielectric constant) 
-        epsii_mix:  dielectric loss factor of mixture (imaginary part of dielectric constant)
-        epsi_host:  relative permittivity of host material, i.e. ice
-        epsii_host: dielectric loss factor of host material, i.e. ice
-        epsi_inc:   relative permittivity of brine inclusions
-        epsii_inc:  dielectric loss factor of brine inclusions
+    eps_mix  =  Spherical inclusions(eps_host, eps_host, eps_inc, eps_inc, volinc)
+        eps_mix:    dielectric constant of mixture
+        eps_host:   dielectric constant of host material, i.e. ice
+        eps_inc:    dielectric constant of brine inclusions
         volinc:     volume of brine inclusions in mixture
         method:     'PolderVanSanten' (not recommended), 'ImprovedBorn' (default), 'TingaVossBlossey'
     """
@@ -599,15 +547,15 @@ def salineicewithairbubbles(sal,T,rho,freq):
     
     #%% Dielectrical constant of saline sea ice:
     # Dielectric constant of pure ice:
-    eps_ice = epureice(T,freq,'Hufford_Matzler')
+    eps_ice = Pureice(T,freq,'Hufford_Matzler')
     # Dielectric constant of brine:
-    eps_brine = ebrine(T,freq,'StogrynDesargant')   
+    eps_brine = Brine(T,freq,'StogrynDesargant')   
     # Volume of brine in ice:
     volbrine = brine.volume(T,sal,'original') 
     #volbrine = brine.volume(T,sal,'Frankenstein') 
     
     # Assuming spherical brine inclusions:
-    eps_spheres = sphericalinclusions(eps_ice,eps_brine,volbrine,'ImprovedBorn')
+    eps_spheres = Sphericalinclusions(eps_ice,eps_brine,volbrine,'ImprovedBorn')
 
     #%% Dielectric constant of saline sea ice with air bubbles:
     if len(rho) > 0:
@@ -620,6 +568,25 @@ def salineicewithairbubbles(sal,T,rho,freq):
         eps_air = 1.0
         
         # Permittivity of saline sea ice with air bubbles as spherical inclusions:
-        eps_mix = sphericalinclusions(eps_spheres,eps_air,vol_air)
+        eps_mix = Sphericalinclusions(eps_spheres,eps_air,vol_air)
         
     return eps_mix
+
+def Purewater(T,freq):
+    """
+    The dielectric constant of pure water.
+    Background information: Chapter 4-2 in Microwave Radar and Radiometric Remote sensing, Ulaby et al.
+    eps = Purewater(T,freq)
+        T:          temperature [K]
+        freq:       frequency [GHz]
+    """
+    Tc=T-273.15
+    frequency=freq*1e9
+    e_w0=88.045-0.4147*Tc+6.295e-4*Tc**2+1.075e-5*Tc**3
+    e_wInfty=4.9
+    #relaxation time
+    tao_w_2pi=1.1109e-10-3.824e-12*Tc+6.938e-14*Tc**2-5.096e-16*Tc**3
+    tao_w=tao_w_2pi/(2*np.pi)
+    #relaxation frequency
+    eps=e_wInfty+(e_w0-e_wInfty)/(1+1j*2*np.pi*frequency*tao_w)
+    return eps

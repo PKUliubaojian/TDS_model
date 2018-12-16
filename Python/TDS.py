@@ -14,12 +14,12 @@ from pandas import DataFrame
 
 #%%Read specified DDMs
 class DDM:
-"""
+    """
     Read Delay Doppler Maps *.nc Files
     Selected DDM by user's defined filter
     Calculate parameters such as DDMA,Leading Edge Slope, Trailing Edge Slope and the correlation
     coefficient with Woodward Ambiguty function
-"""
+    """
     def __init__(self,DDMfolder,SNR_Min=0,SNR_Max=50,Incidence_Min=0,Incidence_Max=90,
                  Gain_Min=-20,Gain_Max=30,SP_class='all'):
         """
@@ -95,7 +95,7 @@ class DDM:
             pass
         else:
             mask=SPwithin(SPlon,SPlat,SP_class)
-        self.UpdateBymask(mask)
+            self.UpdateBymask(mask)
         metadata.close()
         DDM_nc.close()
         

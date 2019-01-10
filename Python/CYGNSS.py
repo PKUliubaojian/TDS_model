@@ -11,42 +11,47 @@ import os
 import geopandas as gpd
 from shapely.geometry import Point
 from pandas import DataFrame
+import xarray as xr
 
 class DDM_L1:
     '''
         CYGNSS Level 1 DDM bistatic radar cross section data reader.
     '''
     def __init__(self,DDMfilename):
-        DDM=Dataset(DDMfilename,'r')
-        ts=np.array(DDM['ddm_timestamp_utc']).repeat(4).reshape(-1,4).reshape(-1,order='F')
-        Lat=np.array(DDM['sp_lat']).reshape(-1)
-        Lon=np.array(DDM['sp_lon']).reshape(-1)
-        Alt=np.array(DDM['sp_alt']).reshape(-1)
-        LES=np.array(DDM['ddm_les']).reshape(-1)
-        nbrcs=np.array(DDM['ddm_nbrcs']).reshape(-1)
-        P_t=np.array(DDM['gps_tx_power_db_w']).reshape(-1)
-        G_t=np.array(DDM['gps_ant_gain_db_i']).reshape(-1)
-        G_r=np.array(DDM['sp_rx_gain']).reshape(-1)
-        R_t=np.array(DDM['tx_to_sp_range']).reshape(-1)
-        R_r=np.array(DDM['rx_to_sp_range']).reshape(-1)
-        Track_ID=np.array(DDM['track_id']).reshape(-1)
-        I_angle=np.array(DDM['sp_inc_angle']).reshape(-1)
-        SNR=np.array(DDM['ddm_snr'][:]).reshape(-1)
-        nbrcs_area=np.array(DDM['nbrcs_scatter_area'][:]).reshape(-1)
-        peak_row=np.array(DDM['brcs_ddm_peak_bin_delay_row'][:]).reshape(-1)
-        peak_col=np.array(DDM['brcs_ddm_peak_bin_dopp_col'][:]).reshape(-1)
-        df=DataFrame({'ts':ts,'Lat':Lat,'Lon':Lon,'Alt':Alt,'SNR':SNR,'nbrcs':nbrcs,
-              'LES':LES,'P_t':P_t,'G_t':G_t,'G_r':G_r,'R_t':R_t,'R_r':R_r,
-              'I_angle':I_angle,'Track_ID':Track_ID,'nbrcs_area':nbrcs_area,
-              'peak_row':peak_row,'peak_col':peak_col})
+        lookup={'Lat':'sp_lat','Lon':'sp_lon','Alt':'sp_alt','LES':'ddm_les',
+            'nbrcs':'ddm_nbrcs','P_t':'gps_tx_power_db_w','G_t':'gps_ant_gain_db_i',
+            'G_r':'sp_rx_gain','R_t':'tx_to_sp_range','R_r':'rx_to_sp_range','Track_ID':'track_id',
+            'I_angle':'sp_inc_angle','SNR':'ddm_snr','nbrcs_area':'nbrcs_scatter_area',
+            'peak_row':'brcs_ddm_peak_bin_delay_row','peak_col':'brcs_ddm_peak_bin_dopp_col'}
+        d=Dataset(DDMfilename,'r')
+        dicts=[[key,np.array(d[value]).reshape(-1)] for key,value in lookup.items()]
+        df=DataFrame(dict(dicts))
+        df['ts']=np.array(d['ddm_timestamp_utc']).repeat(4).reshape(-1,4).reshape(-1,order='F')
         mask=(df["LES"]!=-9999)&(df["nbrcs"]!=-9999)&(df["SNR"]!=-9999)
-        ddms=np.array(DDM['brcs'][:]).reshape(-1,17,11)
-        areas=np.array(DDM['eff_scatter'][:]).reshape(-1,17,11)
+        ddms=np.array(d['brcs'][:]).reshape(-1,17,11)
+        areas=np.array(d['eff_scatter'][:]).reshape(-1,17,11)
         self.ddms=ddms[mask,:,:]
         self.df=df[mask]
         self.areas=areas[mask]
         
-def DDMA_CY(ddms,areas,p_delay,p_doppler,delaybin=3,dopplerbin=5):
+class DDM_L2:
+    '''
+        CYGNSS Level 2 MSS & ocean wind speed data.
+    '''
+    def __init__(self,fname):
+        lookup={'Lat':'lat','Lon':'lon','mss':'mean_square_slope','mss_uncertainty':'mean_square_slope_uncertainty',
+            'time':'sample_time','windspeed':'wind_speed','ws_uncertainty':'wind_speed_uncertainty',
+            'fresnel_coeff':'fresnel_coeff','les':'les_mean','ddma':'nbrcs_mean','RCG':'range_corr_gain','azimuth_angle':'azimuth_angle',
+            'incidence_angle':'incidence_angle'
+            }
+        d=Dataset(fname,'r')
+        dicts=[[key,np.array(d[value]).reshape(-1)] for key,value in lookup.items()]
+        df=DataFrame(dict(dicts))
+        self.df=df
+
+        
+    
+def DDMA(ddms,areas,p_delay,p_doppler,delaybin=3,dopplerbin=5):
     """
         输入的ddms和area都是一个三维矩阵，第一个维度为ddm数量，第二个维度delay固定为17，第三个维度doppler固定为10
         ddms: CYGNSS L1b DDM
@@ -69,7 +74,7 @@ def DDMA_CY(ddms,areas,p_delay,p_doppler,delaybin=3,dopplerbin=5):
     DDMA=np.sum(c_brcs,axis=0)/np.sum(c_area,axis=0)
     return DDMA
 
-def LES_CY(ddms,areas,p_delay,p_doppler,delaybin=3,dopplerbin=5):
+def LES(ddms,areas,p_delay,p_doppler,delaybin=3,dopplerbin=5):
     """
         输入的ddms和area都是一个三维矩阵，第一个维度为ddm数量，第二个维度delay固定为17，第三个维度doppler固定为10
         ddms: CYGNSS L1b DDM
@@ -97,7 +102,7 @@ def LES_CY(ddms,areas,p_delay,p_doppler,delaybin=3,dopplerbin=5):
     LES=leading/c_area
     return LES
 
-def TES_CY(ddms,areas,p_delay,p_doppler,delaybin=5,dopplerbin=5):
+def TES(ddms,areas,p_delay,p_doppler,delaybin=5,dopplerbin=5):
     """
         输入的ddms和area都是一个三维矩阵，第一个维度为ddm数量，第二个维度delay固定为17，第三个维度doppler固定为10
         ddms: CYGNSS L1b DDM

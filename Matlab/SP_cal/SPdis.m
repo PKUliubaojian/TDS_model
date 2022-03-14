@@ -13,6 +13,7 @@ function [f,g,H]=SPdis(Pt,Pr,PS)
     f= pdist2(Pt,PS)+pdist2(Pr,PS);
     if nargout>1
         %计算梯度和Hessian矩阵
+        %这里的jac和Hess计算都有误,2019/3/3
         g=[4.*PS(1)-2.*Pr(1)-2.*Pt(1);4.*PS(2)-2.*Pr(2)-2.*Pt(2);4.*PS(3)-2.*Pr(3)-2.*Pt(3)];
         H=[4,0,0;0,4,0;0,0,4];
     end
